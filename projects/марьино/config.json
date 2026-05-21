@@ -1,0 +1,17 @@
+{
+  "name": "марьино",
+  "project_full": "Здания складского назначения «СК Марьино»",
+  "project_short": "СК «МАРЬИНО»",
+  "project_addr": "по адресу: Российская Федерация, город Санкт-Петербург, внутригородское муниципальное образование города федерального значения Санкт-Петербурга город Петергоф, территория Марьино участок 2 (северо-западнее дома 50, корпус 5, строение 1 по улице Новые Заводы)",
+  "report_basename": "СК Марьино",
+  "gdrive_file_id": "1-xYtcP_bWVm1k8xQ325KkPnGnpBQroff77X-1Y7GwHM",
+  "cover_image": "C:/Авраменко/Claude Code Projects/МСГ/projects/марьино/cover.png",
+  "template_pptx": "C:/Авраменко/Claude Code Projects/МСГ/template/repino_template.pptx",
+  "output_dir": "C:/Авраменко/1. КОМПАКТ/Отчеты/Еженедельные отчеты по пятницам/Марьино",
+  "meeting_out_dir": "C:/Авраменко/1. КОМПАКТ/1. Марьино/2. МСГ",
+  "include_monolit": false,
+  "include_chislennost": true,
+  "gpr_object_match": "Марьино",
+  "predpisaniya_summary_file_id": 1642972,
+  "docs_podryadchikov_file_id": 1638006
+}

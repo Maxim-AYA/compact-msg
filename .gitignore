@@ -1,0 +1,58 @@
+# === Секреты — НИКОГДА не коммитить ===
+.bitrix-webhook
+.env
+secrets.json
+*.token
+*.key
+*credentials*
+
+# === Локальные настройки Claude Code ===
+.claude/
+.claude-cache/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# === IDE / OS ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Архивы прошлых версий скриптов ===
+# Историю даёт сам git, _archive/ больше не нужен
+_archive/
+
+# === Логи и временные файлы ===
+*.log
+*.tmp
+~$*
+
+# === Готовые отчёты (выгрузки/выходные данные, не код) ===
+# Шаблоны в template/ — исключение
+*.xlsx
+*.xlsm
+*.xls
+*.docx
+*.doc
+*.pdf
+*.pptx
+*.ppt
+*.tsv
+*.csv
+!template/**
+
+# === Аудио и транскрипции (записи совещаний) ===
+*.m4a
+*.mp3
+*.wav
+*.mp4
+*.srt
+*.vtt

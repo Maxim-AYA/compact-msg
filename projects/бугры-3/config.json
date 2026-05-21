@@ -1,0 +1,17 @@
+{
+  "name": "бугры-3",
+  "project_full": "Складской комплекс «Бугры-3»",
+  "project_short": "СК «БУГРЫ-3»",
+  "project_addr": "по адресу: Ленинградская обл., Всеволожский р-н, Бугровское г.п., земельный участок с кадастровым номером 47:07:0713003:16523",
+  "report_basename": "СК Бугры-3",
+  "gdrive_file_id": "1N8Ar0KcrAcRILhhrRzMZhyTzTofOcKqKXtAORN0q1qc",
+  "cover_image": "C:/Авраменко/Claude Code Projects/МСГ/projects/бугры-3/cover.png",
+  "template_pptx": "C:/Авраменко/Claude Code Projects/МСГ/template/repino_template.pptx",
+  "output_dir": "C:/Авраменко/1. КОМПАКТ/Отчеты/Еженедельные отчеты по пятницам/Бугры-3",
+  "meeting_out_dir": "C:/Авраменко/1. КОМПАКТ/7. Бугры 3/МСГ",
+  "include_monolit": false,
+  "include_chislennost": true,
+  "gpr_object_match": "Бугры-3",
+  "predpisaniya_summary_file_id": 1642242,
+  "docs_podryadchikov_file_id": 1636984
+}

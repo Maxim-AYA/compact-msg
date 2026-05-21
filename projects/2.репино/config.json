@@ -1,0 +1,17 @@
+{
+  "name": "2.репино",
+  "project_full": "СКК «RBI Репино Санаторий»",
+  "project_short": "СК «RBI РЕПИНО САНАТОРИЙ»",
+  "project_addr": "по адресу: г. Санкт-Петербург, пос. Репино",
+  "report_basename": "RBI Репино Санаторий",
+  "gdrive_file_id": "1sb5lc_ljg19ldGA2h1jKReiRGZHgXf8XJzRNjr8DlqE",
+  "cover_image": "C:/Авраменко/Claude Code Projects/МСГ/projects/2.репино/cover.png",
+  "template_pptx": "C:/Авраменко/Claude Code Projects/МСГ/template/repino_template.pptx",
+  "output_dir": "C:/Авраменко/1. КОМПАКТ/Отчеты/Еженедельные отчеты по пятницам/Репино",
+  "meeting_out_dir": "C:/Авраменко/1. КОМПАКТ/6. Репино/2. МСГ",
+  "include_monolit": true,
+  "include_chislennost": true,
+  "gpr_object_match": "Репино",
+  "predpisaniya_summary_file_id": 1639646,
+  "docs_podryadchikov_file_id": 1637874
+}
