@@ -34,46 +34,6 @@
 
 См. правило `HEADER_TAIL` в `build_stage_sheet` (глобальный `МСГ\CLAUDE.md`). На Марьино пока в явном виде не выловлено, но ждать — нормальная практика заполнения. Если на Пакет/Тендер/Договор пропадает Раб.ГПР — это оно.
 
-## TODO
+## Fallback при HTTP 400 от Google export
 
-### Точка останова 2026-05-13 (вечер)
-
-Пользователь правил исходник в gsheet → попросил пересобрать `/мсг марьино`. **Пересборка не завершилась:**
-- Прямой URL `export?format=xlsx` отдал **HTTP 400 «Страница не найдена»** — и без cookies, и с `--browser edge`.
-- MCP Google Drive `get_file_metadata` тот же fileId **видит** (modifiedTime 2026-05-13T14:29:22Z) — то есть файл существует, просто публичный export-endpoint временно не отдаёт.
-- Пользователь сказал «остановись, надо уходить».
-
-**Текущий файл:** `C:\Авраменко\1. КОМПАКТ\1. Марьино\2. МСГ\МСГ_СК Марьино отчет к совещанию от 13.05.2026.xlsx` — **СТАРАЯ** версия (до правок пользователя).
-
-**Что попробовать (по приоритету):**
-
-1. **Повторить прямой URL.** Google часто 400-ит сразу после save, через 5-30 минут возвращает экспорт:
-   ```powershell
-   python "C:\Авраменко\Claude Code Projects\МСГ\scripts\gsheet_download_xlsx.py" `
-     --file-id 1-xYtcP_bWVm1k8xQ325KkPnGnpBQroff77X-1Y7GwHM `
-     --out "C:\Users\amy\AppData\Local\Temp\msg_марьино_full.xlsx"
-   ```
-
-2. **Через MCP claude.ai Google Drive** — обходит публичный endpoint:
-   ```
-   mcp__claude_ai_Google_Drive__download_file_content(
-     fileId="1-xYtcP_bWVm1k8xQ325KkPnGnpBQroff77X-1Y7GwHM",
-     exportMimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-   )
-   ```
-   Возвращает base64 → декодировать → записать в `%TEMP%\msg_марьино_full.xlsx`. Лимит MCP 10 МБ, файл ~1.36 МБ, проходит.
-
-3. **Дальше — стандартный пайплайн:**
-   ```powershell
-   Stop-Process -Name EXCEL -Force -ErrorAction SilentlyContinue
-   python "C:\Авраменко\Claude Code Projects\МСГ\scripts\build_meeting_report.py" `
-     --project марьино --month Май `
-     --xlsx "C:\Users\amy\AppData\Local\Temp\msg_марьино_full.xlsx" `
-     --date <DD.MM.YYYY>
-   ```
-   Скрипт сам применит `strip_self_sheet_refs` + двойной Open.
-
-### Открытые вопросы
-
-- Подтвердить, что в текущем (старом) файле `#REF!` действительно ушёл — обратной связи от пользователя пока нет.
-- Что именно правил в gsheet (формулы дат / структуру листов / праздники B2:B44).
+Если прямой URL `export?format=xlsx` отдаёт «Страница не найдена» сразу после правок в gsheet — обычно проходит через 5–30 минут. Альтернатива — MCP claude.ai Google Drive `download_file_content(fileId, exportMimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")`, обходит публичный endpoint, лимит 10 МБ.

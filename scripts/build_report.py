@@ -258,6 +258,11 @@ def lagging_smr():
             'obj_otkl': plan.get('obj_otkl'),
             'unit': plan.get('unit'),
             'proj_obj': plan.get('proj_obj'),
+            # AQ из МСГ — План/Факт на текущий месяц. На План-строке = плановый
+            # объём на отчётный месяц (формула в gsheet агрегирует календарную
+            # часть). Используется в колонке «План на месяц» слайда СМР
+            # (правка пользователя 22.05.2026).
+            'plan_month': plan.get('pf_month'),
             'prereq': plan.get('prereq'),
         })
     return out
@@ -268,6 +273,21 @@ TND_LAG = lagging_by_stage('План Т')
 DOG_LAG = lagging_by_stage('План Д')
 MOB_LAG = lagging_by_stage('План М')
 SMR_LAG = lagging_smr()
+
+# Снять хвост вида « - Фамилия И.» / « — Иванов И.О.» в конце name (запрос
+# пользователя 22.05.2026 на примере «Выдача РД - Ниязов Р.»). Это
+# ответственный из колонки X gsheet (раздельщик/ГИП), не имеет ценности
+# в таблице критических отставаний и забивает место колонки наименования.
+# Применяем ко всем 6 стадиям — суффикс одинаковый, источник один.
+import re as _re_resp
+_RESP_TAIL_RE = _re_resp.compile(
+    r'\s*[-–—]\s*[A-ZА-ЯЁa-zа-яё][A-ZА-ЯЁa-zа-яё\-]+\s+[A-ZА-ЯЁ]\.\s*[A-ZА-ЯЁ]?\.?\s*$'
+)
+for _lag_list in (RD_LAG, PAK_LAG, TND_LAG, DOG_LAG, MOB_LAG, SMR_LAG):
+    for _it in _lag_list:
+        _nm = _it.get('name')
+        if _nm:
+            _it['name'] = _RESP_TAIL_RE.sub('', str(_nm)).rstrip()
 
 print(f"Lag counts: РД={len(RD_LAG)} Пакет={len(PAK_LAG)} Тендер={len(TND_LAG)} "
       f"Договор={len(DOG_LAG)} Моб={len(MOB_LAG)} СМР={len(SMR_LAG)}")
@@ -706,7 +726,7 @@ else:
 # ---------------------------- slide 2: lifecycle table ----------------------------
 for s in slide2.shapes:
     if s.has_text_frame and 'СВОДНАЯ' in s.text_frame.text:
-        set_text(s, f"ЖИЗНЕННЫЙ ЦИКЛ МСГ ({PROJECT_SHORT})")
+        set_text(s, f"ЖИЗНЕННЫЙ ЦИКЛ ПРОЕКТА ({PROJECT_SHORT})")
         break
 for s in list(slide2.shapes):
     if s.shape_type == 13 and s.name == 'Рисунок 4':
@@ -947,8 +967,12 @@ if CFG.get("include_chislennost"):
         _SIGMA_FILL  = RGBColor(0xEA, 0xF1, 0xF8)  # светло-голубой — теперь подсвечивает ИТР
         _RED_TXT     = RGBColor(0xC0, 0x00, 0x00)
         _GREEN_TXT   = RGBColor(0x00, 0x80, 0x00)
-        # Ширины: №(0.04), Подрядчик(0.42), Кат.(0.08), Пред.(0.15), Тек.(0.15), Δ(0.16)
-        _CHISL_FRACS = [0.04, 0.42, 0.08, 0.15, 0.15, 0.16]
+        # Ширины (правка пользователя 22.05.2026): Пред./Тек./Δ — в 2 раза уже
+        # (раньше 0.15/0.15/0.16 → 0.075/0.075/0.08). Кат. — той же узкой ширины
+        # как Пред./Тек. (0.08 → 0.075). Освободившиеся ~0.235 уходят в столбец
+        # «Подрядчик» (0.42 → 0.655). В нём же — выравнивание по правому краю
+        # (правка ниже в _build_chisl_table — параграфы имени и роли).
+        _CHISL_FRACS = [0.04, 0.655, 0.075, 0.075, 0.075, 0.08]
 
         def _chisl_fmt_int(v):
             if v is None: return "–"
@@ -1041,21 +1065,24 @@ if CFG.get("include_chislennost"):
                 _cell_num = _tbl.cell(_row_start, 0)
                 _cell_num.merge(_tbl.cell(_row_start + 3, 0))
                 _chisl_set_simple(_cell_num, str(_idx), size=12, bold=True)
-                # Подрядчик — merge 4 строк
+                # Подрядчик — merge 4 строк. Выравнивание по ПРАВОМУ краю
+                # (правка пользователя 22.05.2026): на фоне расширенной до 0.655
+                # колонки текст у левого края «висит» далеко от связанных с ним
+                # цифр; справа — ближе к категориям/значениям, читается лучше.
                 _cell_n = _tbl.cell(_row_start, 1)
                 _cell_n.merge(_tbl.cell(_row_start + 3, 1))
                 _cell_n.text = ""
                 _cell_n.vertical_anchor = MSO_ANCHOR.MIDDLE
                 _cell_n.margin_top = Emu(30000); _cell_n.margin_bottom = Emu(30000)
-                _cell_n.margin_left = Emu(60000); _cell_n.margin_right = Emu(30000)
+                _cell_n.margin_left = Emu(30000); _cell_n.margin_right = Emu(60000)
                 _tf_n = _cell_n.text_frame; _tf_n.word_wrap = True
                 for _p in list(_tf_n.paragraphs)[1:]:
                     _p._p.getparent().remove(_p._p)
-                _p1 = _tf_n.paragraphs[0]; _p1.alignment = PP_ALIGN.LEFT
+                _p1 = _tf_n.paragraphs[0]; _p1.alignment = PP_ALIGN.RIGHT
                 _r1 = _p1.add_run(); _r1.text = _name
                 _r1.font.name = "Calibri"; _r1.font.size = Pt(11); _r1.font.bold = True
                 _r1.font.color.rgb = _BLACK
-                _p2 = _tf_n.add_paragraph(); _p2.alignment = PP_ALIGN.LEFT
+                _p2 = _tf_n.add_paragraph(); _p2.alignment = PP_ALIGN.RIGHT
                 _r2 = _p2.add_run(); _r2.text = _role
                 _r2.font.name = "Calibri"; _r2.font.size = Pt(9); _r2.font.italic = True
                 _r2.font.color.rgb = _ROLE
@@ -1337,15 +1364,18 @@ def _set_title_smr(slide, text):
                 set_text(s, text); return
 
 _SMR_SLIDES = build_paged_table(prs, slide3, SMR_LAG, [
-    # Правка пользователя 20.05.2026: «Дни откл.» переехали ПОСЛЕ «Проект.
-    # объём» — блок «объёмы» (Объём откл. / Ед. / Проект.объём) идёт цельно,
-    # сразу за ним «Дни откл.», далее даты план/факт.
+    # Правка пользователя 22.05.2026 (вечер): «План на месяц» сразу ПОСЛЕ
+    # «Объём откл.» — оба показывают «состояние на сегодня» (дефицит +
+    # планируемый объём на месяц), читатель ловит их в одной группе. «Проект.
+    # объём» / «Ед.» уходят правее как справочные.
+    # До этого (утро 22.05): «План на месяц» стоял после «Ед.».
     ("Предш.", "prereq", 0.04, lambda v: str(v) if v else '–'),
-    ("Наименование работ", "name", 0.46, lambda v: str(v)[:200]),
+    ("Наименование работ", "name", 0.42, lambda v: str(v)[:200]),
     ("Здан.", "block", 0.05, lambda v: str(v) if v else '–'),
-    ("Объём\nоткл.", "obj_otkl", 0.07, fmt_num),
+    ("Объём\nоткл.", "obj_otkl", 0.06, fmt_num),
+    ("План\nна месяц", "plan_month", 0.06, fmt_pos),
+    ("Проект.\nобъём", "proj_obj", 0.06, fmt_pos),
     ("Ед.", "unit", 0.05, lambda v: str(v) if v else '–'),
-    ("Проект.\nобъём", "proj_obj", 0.07, fmt_pos),
     ("Дни\nоткл.", "days_dev", 0.05, fmt_days_neg_only),
     ("План\nначало", "plan_n", 0.07, fmt_date),
     ("План\nоконч.", "plan_o", 0.07, fmt_date),
@@ -1916,26 +1946,66 @@ if PRED_FILE_ID:
                 'Рисунок 6',
             }
 
-            # Пагинация: до 12 «логических» строк на слайд (data-row или
-            # section-header — каждая считается за 1). Не оставляем section-
-            # заголовок без последующих строк (orphan) — если он попал в самый
-            # конец чанка, переносим в начало следующего.
-            # Правка пользователя 2026-05-21: было 14, снижено до 12 — на
-            # Бугры-3 страница 18/19 не влезала (длинный текст «Перечень
-            # нарушений» переносился word_wrap'ом за пределы row.height).
-            _PRED_ROWS_PER_PAGE = 12
+            # Пагинация (правка пользователя 22.05.2026, поздний вечер):
+            # отказались от весовой модели — теперь высота строки считается
+            # ПО ФАКТИЧЕСКОМУ контенту (по самому длинному тексту в строке),
+            # а пагинация жадная: пока сумма высот помещается в avail_h —
+            # кладём в текущий чанк, не помещается — открываем новый слайд
+            # (шапка повторится — table builder её всегда рисует).
+            #
+            # Расчёт row_h:
+            #  • для каждой колонки: lines = ceil(len(text) / chars_per_line),
+            #    где chars_per_line ≈ prop_w / 0.0056 (тот же эмпирический
+            #    коэффициент Pt(9) Calibri, что используется в name_cpl);
+            #  • row_h = max_lines_по_колонкам * _LINE_H + _PADDING;
+            #  • section-row → _SECTION_H (узкий navy-разделитель).
+            #
+            # Коэффициенты:
+            #  • _LINE_H = 165000 EMU (~13pt с межстрочным для Pt(9));
+            #  • _PADDING = 40000 EMU (margin_top + margin_bottom ячейки);
+            #  • _SECTION_H = 130000 EMU (узкая полоса заголовка раздела).
+            _PRED_LINE_H = 165000
+            _PRED_PADDING = 40000
+            _PRED_SECTION_H = 130000
+            _pred_avail_h = int(prs.slide_height) - 900000 - 420000 - 300000  # top - hdr - bottom
+
+            def _chars_per_line(_prop_w):
+                # 0.0056 = эфф.ширина_символа / tbl_w для Pt(9) Calibri в
+                # ячейке с margin_left/right = 30000 EMU.
+                return max(6, int(_prop_w / 0.0056))
+
+            def _pred_row_h(_r):
+                if isinstance(_r, dict):
+                    return _PRED_SECTION_H
+                _max_lines = 1
+                for _ci_w in range(len(_PRED_FRACS)):
+                    _txt = str(_r[_ci_w] if _ci_w < len(_r) else '')
+                    if not _txt:
+                        continue
+                    _cpl = _chars_per_line(_PRED_FRACS[_ci_w])
+                    _rows_for_col = 0
+                    for _part in _txt.split('\n'):
+                        _rows_for_col += max(1, -(-len(_part) // _cpl))
+                    if _rows_for_col > _max_lines:
+                        _max_lines = _rows_for_col
+                return _max_lines * _PRED_LINE_H + _PRED_PADDING
+
             _pred_chunks = []
-            _curr = []
+            _curr = []; _curr_h = 0
             for _it in _pred_rows:
-                _curr.append(_it)
-                if len(_curr) >= _PRED_ROWS_PER_PAGE:
+                _rh = _pred_row_h(_it)
+                if _curr and (_curr_h + _rh) > _pred_avail_h:
+                    # Orphan-protection: section без следующих data-строк —
+                    # переносим на следующий слайд вместе с первой data-row.
                     if isinstance(_curr[-1], dict):
                         _last = _curr.pop()
+                        _curr_h -= _pred_row_h(_last)
                         _pred_chunks.append(_curr)
-                        _curr = [_last]
+                        _curr = [_last]; _curr_h = _pred_row_h(_last)
                     else:
                         _pred_chunks.append(_curr)
-                        _curr = []
+                        _curr = []; _curr_h = 0
+                _curr.append(_it); _curr_h += _rh
             if _curr:
                 _pred_chunks.append(_curr)
             _pred_total_pages = len(_pred_chunks)
@@ -1975,32 +2045,23 @@ if PRED_FILE_ID:
                 _tbl_w = _sw - 2 * _ml
                 _tbl_top = Emu(900000)
                 _hdr_h = Emu(420000)
-                # Адаптивная высота строки. Section-row (dict) занимает 1/3
-                # от data-row, поэтому «эффективная» длина чанка для расчёта
-                # _data_h = data_count + section_count/3. Без этого учёта
-                # _data_h занижался: при 14 строках (включая sections) каждая
-                # data-row получала avail_h/14, а реальная высота 14 строк
-                # из data+section по факту = 14_data + 0.33_section *_data_h
-                # < avail_h — место оставалось, но word_wrap длинных текстов
-                # «Перечня нарушений» торчал за пределы. Учёт фактических
-                # весов даёт нам _data_h, под который текст помещается.
-                _avail_h = _sh_h - _tbl_top - Emu(300000) - _hdr_h
-                _data_count = sum(1 for _x in _chunk if not isinstance(_x, dict))
-                _section_count = sum(1 for _x in _chunk if isinstance(_x, dict))
-                _eff_rows = _data_count + _section_count / 3.0
-                _data_h = min(Emu(560000), int(_avail_h / max(1, _eff_rows)))
+                # Высота каждой строки = _pred_row_h(row) (правка 22.05.2026,
+                # поздний вечер) — по фактическому контенту, та же функция
+                # которая используется при жадной пагинации выше.
+                _row_heights = []
+                _actual_h_emu = 0
+                for _x in _chunk:
+                    _rh = _pred_row_h(_x)
+                    _row_heights.append(_rh)
+                    _actual_h_emu += _rh
                 _n_rows = 1 + len(_chunk)
-                _tbl_h = _hdr_h + int(_data_h * _eff_rows)
+                _tbl_h = _hdr_h + _actual_h_emu
 
                 _gframe = _pred_slide.shapes.add_table(_n_rows, 8, _ml, _tbl_top, _tbl_w, _tbl_h)
                 _ptbl = _gframe.table
                 _ptbl.rows[0].height = _hdr_h
-                # Section-row («Предписания строительного контроля ...») — в 3
-                # раза ниже data-row (узкий разделитель), data-rows — обычные.
-                _section_h = max(Emu(80000), int(_data_h / 3))
                 for _ri in range(1, _n_rows):
-                    _is_section = isinstance(_chunk[_ri - 1], dict)
-                    _ptbl.rows[_ri].height = _section_h if _is_section else _data_h
+                    _ptbl.rows[_ri].height = _row_heights[_ri - 1]
                 for _ci, _fr in enumerate(_PRED_FRACS):
                     _ptbl.columns[_ci].width = Emu(int(_tbl_w * _fr))
 
@@ -2018,6 +2079,61 @@ if PRED_FILE_ID:
                 #   чёрный шрифт, не bold;
                 # — section-row (dict {"section": "..."}) — merge 8 ячеек,
                 #   navy-фон + белый bold Pt(11), заголовок раздела предписаний.
+                #
+                # Merge подряд идущих ячеек по правилам (правка пользователя
+                # 22.05.2026, утро+вечер):
+                #  • колонки 0, 1 (№ предп., Дата выдачи) — ключ (№, Дата).
+                #    Одно предписание с N подрядчиков идёт N строками подряд
+                #    с повторяющимися № и датой → объединяем в одну ячейку.
+                #  • колонка 2 (Подрядчик) — ключ (№, Дата, Подрядчик). Внутри
+                #    одного предписания у одного подрядчика может быть
+                #    несколько нарушений → объединяем подрядчика. Ключ
+                #    включает №/Дату, чтобы не сливать одинаковых подрядчиков
+                #    с двух разных предписаний подряд.
+                # Section-row разрывает любую группу. Pre-pass вычисляет
+                # диапазоны; в продолжающих строках текст в соотв. колонках
+                # не ставится; merge выполняется ПОСЛЕ установки текста (иначе
+                # PowerPoint выбросит уже залитый текст из первой ячейки).
+                _MERGE_RULES = [
+                    # (columns_to_merge, key_fn(row_tuple))
+                    ([0, 1], lambda _r: (str(_r[0]).strip(), str(_r[1]).strip())),
+                    ([2],    lambda _r: (str(_r[0]).strip(), str(_r[1]).strip(),
+                                          str(_r[2]).strip())),
+                ]
+
+                def _compute_merge_groups(_chunk_local, _key_fn):
+                    """Возвращает list[(start_ri, end_ri)] с end_ri > start_ri."""
+                    _groups = []
+                    _gs = None; _ge = None; _gk = None
+                    for _i_pre, _row_pre in enumerate(_chunk_local):
+                        _ri_pre = _i_pre + 1
+                        if isinstance(_row_pre, dict):
+                            if _gs is not None and _ge > _gs:
+                                _groups.append((_gs, _ge))
+                            _gs = None; _gk = None
+                            continue
+                        _k = _key_fn(_row_pre)
+                        if _gs is None:
+                            _gs = _ri_pre; _ge = _ri_pre; _gk = _k
+                        elif _k == _gk:
+                            _ge = _ri_pre
+                        else:
+                            if _ge > _gs:
+                                _groups.append((_gs, _ge))
+                            _gs = _ri_pre; _ge = _ri_pre; _gk = _k
+                    if _gs is not None and _ge > _gs:
+                        _groups.append((_gs, _ge))
+                    return _groups
+
+                _merge_plan = []  # list[(cols, groups)]
+                _blank_map = {}   # ri -> set of column indices to blank
+                for _cols, _kfn in _MERGE_RULES:
+                    _grps = _compute_merge_groups(_chunk, _kfn)
+                    _merge_plan.append((_cols, _grps))
+                    for _gs, _ge in _grps:
+                        for _r in range(_gs + 1, _ge + 1):
+                            _blank_map.setdefault(_r, set()).update(_cols)
+
                 for _ri, _row in enumerate(_chunk, start=1):
                     if isinstance(_row, dict):
                         _c0 = _ptbl.cell(_ri, 0)
@@ -2026,6 +2142,7 @@ if PRED_FILE_ID:
                         _pred_set_cell(_c0, _row["section"], bold=True, size=11,
                                        align=PP_ALIGN.CENTER, fill=_PRED_NAVY)
                         continue
+                    _blank_cols = _blank_map.get(_ri, set())
                     for _ci, _val in enumerate(_row):
                         _val_s = str(_val).strip()
                         _is_lag = (_ci == 5)
@@ -2038,14 +2155,25 @@ if PRED_FILE_ID:
                             _fill = _PRED_GREEN
                         elif _is_snyatie_ne:
                             _fill = _PRED_PINK
+                        # В продолжающих строках merge-группы текст пустой —
+                        # ячейки потом мерджатся в первую.
+                        _val_render = "" if _ci in _blank_cols else _val
                         _pred_set_cell(
-                            _ptbl.cell(_ri, _ci), _val,
+                            _ptbl.cell(_ri, _ci), _val_render,
                             bold=_bold,
                             size=9,
                             align=_PRED_ALIGNS[_ci],
                             fill=_fill,
                             color=_color,
                         )
+
+                # Merge ячеек по правилам. ПОСЛЕ установки текста (первая
+                # ячейка диапазона уже содержит значение, продолжающие —
+                # пустые; merge схлопывает, сохраняя текст первой).
+                for _cols, _grps in _merge_plan:
+                    for _gs, _ge in _grps:
+                        for _mci in _cols:
+                            _ptbl.cell(_gs, _mci).merge(_ptbl.cell(_ge, _mci))
 
                 reorder_slide_to(prs, _pred_slide, len(prs.slides) - 1)
             print(f"Предписания slides added: {len(_pred_rows)} строк → {_pred_total_pages} слайд(а)")
@@ -2063,6 +2191,14 @@ else:
 # Drop slides queued for removal (deferred until after clone_slide ops finish,
 # so partname allocation in clone_slide doesn't collide with freed slot names)
 _flush_slide_removals(prs)
+
+# Правка пользователя 22.05.2026: «ЖИЗНЕННЫЙ ЦИКЛ ПРОЕКТА» (slide2) переносим
+# в самый конец альбомной колоды — он работает как сводка/итог, логичнее
+# показывать ПОСЛЕ детализации стадий и предписаний, а не перед ними.
+# Делаем reorder здесь — после удаления пустых стадий и после клонов, до
+# присвоения N/M, чтобы нумерация легла на финальный порядок.
+if slide2 in list(prs.slides):
+    reorder_slide_to(prs, slide2, len(prs.slides) - 1)
 
 # ---------------------------- renumber slides ----------------------------
 import re as _re
