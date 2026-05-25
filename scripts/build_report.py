@@ -854,15 +854,17 @@ if CFG.get("include_chislennost"):
             if base is None: return None
             return base + (d.day - 1)
 
-        # Отчётный день — СРЕДА (правка 20.05.2026). Раньше брали понедельник,
-        # Отчётный день — понедельник: тек.пн = пн текущей недели,
-        # пред.пн = пн предыдущей недели. weekday()==0 → понедельник.
-        _curr_day = TODAY - dt.timedelta(days=TODAY.weekday())
+        # Отчётный день берётся из config: chisl_report_weekday (0=пн, 2=ср).
+        # Репино=0 (пн), Марьино/Бугры-3=2 (ср). По умолчанию 0.
+        _DAY_NAMES = {0: 'пн', 1: 'вт', 2: 'ср', 3: 'чт', 4: 'пт', 5: 'сб', 6: 'вс'}
+        _report_wd = CFG.get("chisl_report_weekday", 0)
+        _curr_day = TODAY - dt.timedelta(days=(TODAY.weekday() - _report_wd) % 7)
         _prev_day = _curr_day - dt.timedelta(days=7)
         _curr_col = _col_for_date(_curr_day)
         _prev_col = _col_for_date(_prev_day)
-        print(f"Ресурсы: тек.пн {_curr_day.strftime('%d.%m.%Y')}, "
-              f"пред.пн {_prev_day.strftime('%d.%m.%Y')}")
+        _dn = _DAY_NAMES.get(_report_wd, '?')
+        print(f"Ресурсы: тек.{_dn} {_curr_day.strftime('%d.%m.%Y')}, "
+              f"пред.{_dn} {_prev_day.strftime('%d.%m.%Y')}")
 
         # 20.05.2026: вместо хардкоженного списка подрядчиков сканируем колонку A
         # (имя\nроль). Это позволяет одной кодой работать и Репино и Марьино

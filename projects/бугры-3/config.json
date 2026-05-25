@@ -11,6 +11,7 @@
   "meeting_out_dir": "C:/Авраменко/1. КОМПАКТ/7. Бугры 3/МСГ",
   "include_monolit": false,
   "include_chislennost": true,
+  "chisl_report_weekday": 2,
   "gpr_object_match": "Бугры-3",
   "predpisaniya_summary_file_id": 1642242,
   "docs_podryadchikov_file_id": 1636984
