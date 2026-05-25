@@ -855,15 +855,14 @@ if CFG.get("include_chislennost"):
             return base + (d.day - 1)
 
         # Отчётный день — СРЕДА (правка 20.05.2026). Раньше брали понедельник,
-        # но руководство сравнивает динамику «по средам»: тек.ср = ср недели
-        # пятничной публикации (= TODAY если TODAY — среда, иначе ближайшая
-        # прошедшая), пред.ср = ср предыдущей недели. weekday()==2 → среда.
-        _curr_day = TODAY - dt.timedelta(days=(TODAY.weekday() - 2) % 7)
+        # Отчётный день — понедельник: тек.пн = пн текущей недели,
+        # пред.пн = пн предыдущей недели. weekday()==0 → понедельник.
+        _curr_day = TODAY - dt.timedelta(days=TODAY.weekday())
         _prev_day = _curr_day - dt.timedelta(days=7)
         _curr_col = _col_for_date(_curr_day)
         _prev_col = _col_for_date(_prev_day)
-        print(f"Ресурсы: тек.ср {_curr_day.strftime('%d.%m.%Y')}, "
-              f"пред.ср {_prev_day.strftime('%d.%m.%Y')}")
+        print(f"Ресурсы: тек.пн {_curr_day.strftime('%d.%m.%Y')}, "
+              f"пред.пн {_prev_day.strftime('%d.%m.%Y')}")
 
         # 20.05.2026: вместо хардкоженного списка подрядчиков сканируем колонку A
         # (имя\nроль). Это позволяет одной кодой работать и Репино и Марьино
@@ -1016,8 +1015,8 @@ if CFG.get("include_chislennost"):
             _n_cols = 6
             _sw_e, _sh_e = prs.slide_width, prs.slide_height
             _W = _sw_e - Emu(341998) * 2
-            _L = Emu(341998); _T = Emu(900000)
-            _H = _sh_e - _T - Emu(900000)
+            _L = Emu(341998); _T = Emu(800000)
+            _H = _sh_e - _T - Emu(800000)
             _tbl_shape = _slide.shapes.add_table(rows=_n_rows, cols=_n_cols,
                                                   left=_L, top=_T, width=_W, height=_H)
             _tbl = _tbl_shape.table
@@ -1138,6 +1137,36 @@ if CFG.get("include_chislennost"):
                     _chisl_set_simple(_tbl.cell(_r_abs, 5), _d_txt,
                                       size=(11 if _is_sigma else 10),
                                       align=_row_align, bold=True, fill=_TOTAL_FILL, color=_d_color)
+
+            # Красная рамка по периметру столбца «Тек.» (col 4).
+            # Левую границу дублируем как lnR на col 3 — PowerPoint рендерит
+            # границу между соседними ячейками по «победителю», и без дубля
+            # на col 3 левая линия пропадает.
+            _COL_TEK = 4
+            _RED_HEX = 'FF0000'
+            _RED_W = 12700  # 1pt
+            def _add_red_sides(_cell, _sides):
+                _tcPr = _cell._tc.get_or_add_tcPr()
+                for _s in _sides:
+                    for _ex in _tcPr.findall(qn(f'a:{_s}')):
+                        _tcPr.remove(_ex)
+                for _s in reversed(_sides):
+                    _ln = etree.Element(qn(f'a:{_s}'))
+                    _ln.set('w', str(_RED_W))
+                    _ln.set('cap', 'flat'); _ln.set('cmpd', 'sng'); _ln.set('algn', 'ctr')
+                    _sf = etree.SubElement(_ln, qn('a:solidFill'))
+                    _sc = etree.SubElement(_sf, qn('a:srgbClr')); _sc.set('val', _RED_HEX)
+                    _pd = etree.SubElement(_ln, qn('a:prstDash')); _pd.set('val', 'solid')
+                    etree.SubElement(_ln, qn('a:round'))
+                    _tcPr.insert(0, _ln)
+            for _r_idx in range(_n_rows):
+                _sides = ['lnL', 'lnR']
+                if _r_idx == 0:
+                    _sides.append('lnT')
+                if _r_idx == _n_rows - 1:
+                    _sides.append('lnB')
+                _add_red_sides(_tbl.cell(_r_idx, _COL_TEK), _sides)
+                _add_red_sides(_tbl.cell(_r_idx, _COL_TEK - 1), ['lnR'])
 
         # Пагинация: по 9 подрядчиков на слайд (правка пользователя 20.05.2026).
         # Когда подрядчиков мало — один слайд, ИТОГО на нём. Когда больше — две
