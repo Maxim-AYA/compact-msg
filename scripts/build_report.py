@@ -654,6 +654,57 @@ def _pred_load_filtered_rows(src_xlsx):
     wb_s.close()
     return rows
 
+
+def _reestr_rd_load(path):
+    """Читает реестр РД и возвращает список строк со статусом 'Не выдано в Компакт',
+    сгруппированных по разделам. Section-заголовки — dict {"section": "..."},
+    data-строки — tuple (№ тома, Шифр, Наименование, Плановая дата от Сигни).
+    """
+    import openpyxl as _ox
+    import datetime as _dt
+    wb = _ox.load_workbook(path, data_only=True)
+    ws = wb['Реестр РД']
+    def _fmt(v):
+        if isinstance(v, (_dt.datetime, _dt.date)):
+            return v.strftime("%d.%m.%Y")
+        if v is None:
+            return ""
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return str(v).strip()
+    _SECTION_RENAME = {
+        "1-4": "Внутриплощадочные сети электроснабжения и освещения",
+    }
+    cur_section = None
+    section_has_data = {}
+    rows = []
+    for r in range(5, ws.max_row + 1):
+        b = ws.cell(r, 2).value  # B: № тома
+        c = ws.cell(r, 3).value  # C: Шифр
+        d = ws.cell(r, 4).value  # D: Наименование
+        status = ws.cell(r, 36).value  # AJ: Статус
+        plan_date = ws.cell(r, 32).value  # AF: Плановая дата от Сигни
+        b_str = str(b).strip() if b else ''
+        # Section header: B содержит текст (не число), C пусто
+        if b_str and not c:
+            try:
+                int(b_str)
+            except ValueError:
+                cur_section = _SECTION_RENAME.get(b_str, b_str)
+                continue
+        if not status or str(status).strip() != 'Не выдано в Компакт':
+            continue
+        shifr = _fmt(c)
+        if not shifr.startswith('РД-'):
+            continue
+        if cur_section and cur_section not in section_has_data:
+            rows.append({"section": cur_section})
+            section_has_data[cur_section] = True
+        rows.append((_fmt(b), shifr, _fmt(d), _fmt(plan_date)))
+    wb.close()
+    return rows
+
+
 if GPR_OBJECT_MATCH:
     gpr_xlsx = _find_latest_gpr_xlsx()
     if gpr_xlsx:
@@ -1775,6 +1826,174 @@ build_paged_table(prs, slide4, RD_LAG, _RD_COLS,
     # генподрядчик СМР, не исполнитель РД), и section-rows одного раздела
     # перестают дублироваться из-за разных «будущих» подрядчиков.
     show_contractor=False)
+
+# ---------------------------- slide 4a: РЕЕСТР РД (Не выдано в Компакт) ----------------------------
+REESTR_RD_PATH = CFG.get("reestr_rd_path")
+if REESTR_RD_PATH and os.path.isfile(REESTR_RD_PATH):
+    try:
+        _rd_reg_rows = _reestr_rd_load(REESTR_RD_PATH)
+        if _rd_reg_rows:
+            _RD_REG_HDR = ["№\nтома", "Шифр", "Наименование раздела, листа",
+                           "Плановая дата\nот Сигни", "Статус"]
+            _RD_REG_FRACS = [0.06, 0.18, 0.42, 0.12, 0.22]
+            _RD_REG_ALIGNS = [PP_ALIGN.CENTER, PP_ALIGN.LEFT, PP_ALIGN.LEFT,
+                              PP_ALIGN.CENTER, PP_ALIGN.CENTER]
+            _RD_REG_NAVY = RGBColor(0x1F, 0x4E, 0x79)
+            _RD_REG_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+            _RD_REG_BLACK = RGBColor(0x00, 0x00, 0x00)
+            _RD_REG_LINE_H = 165000
+            _RD_REG_PADDING = 40000
+            _RD_REG_SECTION_H = 130000
+            _rd_reg_avail_h = int(prs.slide_height) - 900000 - 420000 - 300000
+
+            def _rd_reg_row_h(_r):
+                if isinstance(_r, dict):
+                    return _RD_REG_SECTION_H
+                _max_lines = 1
+                for _ci in range(len(_RD_REG_FRACS)):
+                    _txt = str(_r[_ci] if _ci < len(_r) else '')
+                    if not _txt:
+                        continue
+                    _cpl = max(6, int(_RD_REG_FRACS[_ci] / 0.0056))
+                    _lines = max(1, -(-len(_txt) // _cpl))
+                    if _lines > _max_lines:
+                        _max_lines = _lines
+                return _max_lines * _RD_REG_LINE_H + _RD_REG_PADDING
+
+            _rd_reg_chunks = []
+            _rd_c = []; _rd_ch = 0
+            for _it in _rd_reg_rows:
+                _rh = _rd_reg_row_h(_it)
+                if _rd_c and (_rd_ch + _rh) > _rd_reg_avail_h:
+                    if isinstance(_rd_c[-1], dict):
+                        _last = _rd_c.pop()
+                        _rd_ch -= _rd_reg_row_h(_last)
+                        _rd_reg_chunks.append(_rd_c)
+                        _rd_c = [_last]; _rd_ch = _rd_reg_row_h(_last)
+                    else:
+                        _rd_reg_chunks.append(_rd_c)
+                        _rd_c = []; _rd_ch = 0
+                _rd_c.append(_it); _rd_ch += _rh
+            if _rd_c:
+                _rd_reg_chunks.append(_rd_c)
+
+            _REESTR_HEADER_NAMES = {
+                'Прямая соединительная линия 10',
+                'Прямоугольник 11',
+                'Прямоугольник 12',
+                'Рисунок 6',
+            }
+            def _rd_reg_set_cell(cell, text, *, bold=False, size=9,
+                                 align=PP_ALIGN.CENTER, fill=None, color=None):
+                if color is None:
+                    color = _RD_REG_WHITE if fill == _RD_REG_NAVY else _RD_REG_BLACK
+                cell.text = ""
+                p = cell.text_frame.paragraphs[0]; p.alignment = align
+                r = p.add_run(); r.text = str(text)
+                r.font.name = "Calibri"; r.font.size = Pt(size)
+                r.font.bold = bold; r.font.color.rgb = color
+                cell.text_frame.word_wrap = True
+                cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                cell.margin_top = Emu(20000); cell.margin_bottom = Emu(20000)
+                cell.margin_left = Emu(30000); cell.margin_right = Emu(30000)
+                if fill is not None:
+                    cell.fill.solid(); cell.fill.fore_color.rgb = fill
+
+            # Находим позицию вставки: сразу после последнего РД-слайда
+            def _find_last_rd_idx():
+                for _i, _sl in enumerate(prs.slides):
+                    for _sh in _sl.shapes:
+                        if _sh.has_text_frame and 'РАБОЧАЯ ДОКУМЕНТАЦИЯ' in _sh.text_frame.text.upper():
+                            return _i
+                return list(prs.slides).index(slide4)
+            _rd_last_idx = _find_last_rd_idx()
+            # Пройти все РД-continuation слайды
+            _sl_list = list(prs.slides)
+            while _rd_last_idx + 1 < len(_sl_list):
+                _nxt = _sl_list[_rd_last_idx + 1]
+                _is_rd = False
+                for _sh in _nxt.shapes:
+                    if _sh.has_text_frame and 'РАБОЧАЯ ДОКУМЕНТАЦИЯ' in _sh.text_frame.text.upper():
+                        _is_rd = True; break
+                if _is_rd:
+                    _rd_last_idx += 1
+                else:
+                    break
+            _rd_reg_insert_idx = _rd_last_idx + 1
+
+            for _pg_idx, _chunk in enumerate(_rd_reg_chunks):
+                _rd_reg_slide = clone_slide(prs, slide3)
+                for _sh in list(_rd_reg_slide.shapes):
+                    if getattr(_sh, 'name', '') not in _REESTR_HEADER_NAMES:
+                        remove_shape(_sh)
+                _title = f"РЕЕСТР РД — НЕ ВЫДАНО В КОМПАКТ ({PROJECT_SHORT})"
+                for _sh in _rd_reg_slide.shapes:
+                    if getattr(_sh, 'name', '') == 'Прямоугольник 11':
+                        set_text(_sh, _title); break
+
+                _sw = prs.slide_width
+                _ml = Emu(341998)
+                _tbl_w = _sw - 2 * _ml
+                _tbl_top = Emu(900000)
+                _hdr_h = Emu(420000)
+                _row_heights = []
+                _actual_h = 0
+                for _x in _chunk:
+                    _rh = _rd_reg_row_h(_x)
+                    _row_heights.append(_rh)
+                    _actual_h += _rh
+                _n_rows = 1 + len(_chunk)
+                _tbl_h = _hdr_h + _actual_h
+
+                _gf = _rd_reg_slide.shapes.add_table(_n_rows, 5, _ml, _tbl_top, _tbl_w, _tbl_h)
+                _rtbl = _gf.table
+                _rtbl.rows[0].height = _hdr_h
+                for _ri in range(1, _n_rows):
+                    _rtbl.rows[_ri].height = _row_heights[_ri - 1]
+                for _ci, _fr in enumerate(_RD_REG_FRACS):
+                    _rtbl.columns[_ci].width = Emu(int(_tbl_w * _fr))
+
+                for _ci, _h in enumerate(_RD_REG_HDR):
+                    _rd_reg_set_cell(_rtbl.cell(0, _ci), _h, bold=True, size=10,
+                                     align=PP_ALIGN.CENTER, fill=_RD_REG_NAVY)
+
+                _RD_REG_RED = RGBColor(0xC0, 0x00, 0x00)
+                for _ri, _row in enumerate(_chunk, start=1):
+                    if isinstance(_row, dict):
+                        _c0 = _rtbl.cell(_ri, 0)
+                        _c4 = _rtbl.cell(_ri, 4)
+                        _c0.merge(_c4)
+                        _rd_reg_set_cell(_c0, _row["section"], bold=True, size=11,
+                                         align=PP_ALIGN.CENTER, fill=_RD_REG_NAVY)
+                        continue
+                    for _ci, _val in enumerate(_row):
+                        _extra = {}
+                        if _ci == 3 and _val:
+                            try:
+                                import datetime as _dtm
+                                _d = _dtm.datetime.strptime(_val, "%d.%m.%Y").date()
+                                if _d < TODAY:
+                                    _extra = {"color": _RD_REG_RED, "bold": True}
+                            except (ValueError, TypeError):
+                                pass
+                        _rd_reg_set_cell(
+                            _rtbl.cell(_ri, _ci), _val,
+                            size=9, align=_RD_REG_ALIGNS[_ci], **_extra)
+                    _rd_reg_set_cell(
+                        _rtbl.cell(_ri, 4), "Не выдано в Компакт",
+                        size=9, align=PP_ALIGN.CENTER,
+                        fill=RGBColor(0xFF, 0xD9, 0xE1))
+
+                reorder_slide_to(prs, _rd_reg_slide, _rd_reg_insert_idx + _pg_idx)
+
+            _data_count = sum(1 for _r in _rd_reg_rows if not isinstance(_r, dict))
+            print(f"Реестр РД slides added: {_data_count} позиций → {len(_rd_reg_chunks)} слайд(а)")
+        else:
+            print("Реестр РД: нет позиций 'Не выдано в Компакт'")
+    except Exception as _e:
+        print(f"WARN: Реестр РД slide skipped: {_e}")
+elif REESTR_RD_PATH:
+    print(f"WARN: reestr_rd_path файл не найден: {REESTR_RD_PATH}")
 
 # ---------------------------- slide 4b: ПАКЕТ ----------------------------
 # Only create a Пакет slide if there's lag.
